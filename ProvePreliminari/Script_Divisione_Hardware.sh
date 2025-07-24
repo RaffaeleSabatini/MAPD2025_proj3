@@ -2,8 +2,8 @@
 
 # Script per dividere CSV per HWID - VERSIONE CORRETTA
 # Configurazione
-INPUT_FILE="5aeff182-52ab-46d3-af1d-57ac75b3a21e.csv"
-OUTPUT_DIR="split_hwid"
+INPUT_FILE="/usr/share/Dataset.csv"
+OUTPUT_DIR="/usr/share"
 
 # Array degli HWID da cercare
 HWIDS=("SW-065" "SW-088" "SW-106" "SW-115")
