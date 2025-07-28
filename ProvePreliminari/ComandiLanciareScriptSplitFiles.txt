@@ -1,7 +1,0 @@
-RICORDATI NEL FILE FILE DI CAMBIARE LA POSIZIONE DEL FILE, IL NOME E OGNI QUANTE RIGHE SPLITTARE IL FILE
-
-chmod +x Script_Divisione_Hardware.sh
-chmod +x split_csv.sh
-
-./Script_Divisione_Hardware.sh
-./split_csv.sh
