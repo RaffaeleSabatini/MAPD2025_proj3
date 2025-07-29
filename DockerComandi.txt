@@ -1,0 +1,10 @@
+docker compose up --scale spark-worker=4 -d
+(alternativa comando docker-compose up)
+docker ps -a (per vedere i processi)
+docker compose down
+
+
+In browser solite 3 finestre ad
+http://localhost:4444/
+http://localhost:8080/
+http://localhost:4040/
