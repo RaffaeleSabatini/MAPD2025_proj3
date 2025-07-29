@@ -1,0 +1,29 @@
+version: "3.9"
+services:
+  spark-master:
+    image: jpazzini/mapd-b:spark-master
+    container_name: spark-master
+    ports:
+      - 8080:8080
+      - 7077:7077
+    volumes:
+      - $PWD:/mapd-workspaceYOLO
+  spark-worker:
+    image: jpazzini/mapd-b:spark-worker
+    depends_on:
+      - spark-master
+    volumes:
+      - $PWD:/mapd-workspace
+    environment:
+      - SPARK_WORKER_CORES=2
+      - SPARK_WORKER_MEMORY=1200m
+  jupyter-notebook:
+    image: jpazzini/mapd-b:spark-jupyter
+    container_name: jupyter-notebook
+    depends_on:
+      - spark-master
+    ports:
+      - 4040:4040
+      - 4444:8888
+    volumes:
+      - $PWD:/mapd-workspace
