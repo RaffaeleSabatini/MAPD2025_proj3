@@ -54,6 +54,8 @@ http://localhost:4040  (per vedere jobs)
 
 ############ FINITO DI LAVORARE ######################
 
+git commit
+git push
 spark.stop()   (da lanciare nel jupyther)
 pkill -f "jupyter-notebook"  (da lanciare dopo da terminale)
 
@@ -88,6 +90,8 @@ http://localhost:4040  (per vedere jobs)
 
 ############ FINITO DI LAVORARE ######################
 
+git commit
+git pull
 spark.stop()   (da lanciare nel jupyther)
 pkill -f "jupyter-notebook"  (da lanciare dopo da terminale)
 
@@ -122,6 +126,8 @@ http://localhost:4040  (per vedere jobs)
 
 ############ FINITO DI LAVORARE ######################
 
+git  commit
+git pull
 spark.stop()   (da lanciare nel jupyther)
 pkill -f "jupyter-notebook"  (da lanciare dopo da terminale)
 
@@ -156,7 +162,7 @@ http://localhost:4040  (per vedere jobs)
 
 ############ FINITO DI LAVORARE ######################
 
+git commit
+git pull
 spark.stop()   (da lanciare nel jupyther)
 pkill -f "jupyter-notebook"  (da lanciare dopo da terminale)
-
-
