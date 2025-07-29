@@ -33,6 +33,8 @@ FRANCESCO	flarov
 --- IN UN TERMINALE ---
 ssh flarov@gate.cloudveneto.it
 ssh -i private/~~~~~~~.pem flarov@10.67.22.135
+cd MAPD2025_proj3/
+git branch --- git pull --- git merge --- ecc...
 jupyter notebook --no-browser --port=8896 --ip=0.0.0.0 & bg
 
 ############ PORTS CONNECTION #######################
@@ -43,9 +45,10 @@ ssh -L 4444:10.67.22.135:8896 \
     -L 4040:10.67.22.135:4040 \
     flarov@gate.cloudveneto.it
     
-############ COSA APRIRE SUL BROWSER #######################
+############ APRIRE BROWSER (mod. incognito)  #######################
 
 http://localhost:4444  (per jupyther notebook)
+--- incolla token dell'altro terminale ---
 http://localhost:8080  (master con dati cluster)
 http://localhost:4040  (per vedere jobs)
 
@@ -63,6 +66,8 @@ MARCO		mboscolo
 
 ssh mboscolo@gate.cloudveneto.it
 ssh -i private/YOLO.pem mboscolo@10.67.22.135
+cd MAPD2025_proj3/
+git branch --- git pull --- git merge --- ecc...
 jupyter notebook --no-browser --port=8897 --ip=0.0.0.0 & bg
 
 ############ PORTS CONNECTION #######################
@@ -74,9 +79,10 @@ ssh -L 4444:10.67.22.135:8897 \
     -L 4040:10.67.22.135:4040 \
     mboscolo@gate.cloudveneto.it
 
-############ COSA APRIRE SUL BROWSER #######################
+############ APRIRE BROWSER (mod. incognito)  #######################
 
 http://localhost:4444  (per jupyther notebook)
+--- incolla token dell'altro terminale ---
 http://localhost:8080  (master con dati cluster)
 http://localhost:4040  (per vedere jobs)
 
@@ -94,6 +100,8 @@ RAFFAELE	rsabatin
 
 ssh rsabatin@gate.cloudveneto.it
 ssh -i private/~~~~~~~.pem rsabatin@10.67.22.135
+cd MAPD2025_proj3/
+git branch --- git pull --- git merge --- ecc...
 jupyter notebook --no-browser --port=8898 --ip=0.0.0.0 & bg
 
 ############ PORTS CONNECTION #######################
@@ -105,9 +113,10 @@ ssh -L 4444:10.67.22.135:8898 \
     -L 4040:10.67.22.135:4040 \
     rsabatin@gate.cloudveneto.it
     
-############ COSA APRIRE SUL BROWSER #######################
+############ APRIRE BROWSER (mod. incognito)  #######################
 
 http://localhost:4444  (per jupyther notebook)
+--- incolla token dell'altro terminale ---
 http://localhost:8080  (master con dati cluster)
 http://localhost:4040  (per vedere jobs)
 
@@ -125,6 +134,8 @@ NICOLÒ	nmontagn
 
 ssh nmontagn@gate.cloudveneto.it
 ssh -i private/Nicolo_key.pem nmontagn@10.67.22.135
+cd MAPD2025_proj3/
+git branch --- git pull --- git merge --- ecc...
 jupyter notebook --no-browser --port=8899 --ip=0.0.0.0 & bg
 
 ############ PORTS CONNECTION #######################
@@ -136,9 +147,10 @@ ssh -L 4444:10.67.22.135:8899 \
     -L 4040:10.67.22.135:4040 \
     nmontagn@gate.cloudveneto.it
 
-############ COSA APRIRE SUL BROWSER #######################
+############ APRIRE BROWSER (mod. incognito)  #######################
 
 http://localhost:4444  (per jupyther notebook)
+--- incolla token dell'altro terminale ---
 http://localhost:8080  (master con dati cluster)
 http://localhost:4040  (per vedere jobs)
 
