@@ -35,6 +35,7 @@ ssh flarover@gate.cloudveneto.it
 ssh -i private/FrancescoKey.pem flarover@10.67.22.135
 cd MAPD2025_proj3/
 git branch --- git pull --- git merge --- ecc...
+sudo ps aux | grep jupyter-notebook  (controllo se altri  stanno lavorando)
 jupyter notebook --no-browser --port=8896 --ip=0.0.0.0 & bg
 
 ############ PORTS CONNECTION #######################
@@ -57,7 +58,7 @@ http://localhost:4042  (per vedere jobs)
 git commit
 git push
 spark.stop()   (da lanciare nel jupyther)
-pkill -f "jupyter-notebook"  (da lanciare dopo da terminale)
+sudo pkill -u $(whoami) -f "jupyter-notebook" (da lanciare dopo da terminale)
 
 ######################################################
 ######################################################
@@ -70,6 +71,7 @@ ssh mboscolo@gate.cloudveneto.it
 ssh -i private/YOLO.pem mboscolo@10.67.22.135
 cd MAPD2025_proj3/
 git branch --- git pull --- git merge --- ecc...
+sudo ps aux | grep jupyter-notebook  (controllo se altri  stanno lavorando)
 jupyter notebook --no-browser --port=8897 --ip=0.0.0.0 & bg
 
 ############ PORTS CONNECTION #######################
@@ -93,7 +95,7 @@ http://localhost:4041  (per vedere jobs)
 git commit
 git pull
 spark.stop()   (da lanciare nel jupyther)
-pkill -f "jupyter-notebook"  (da lanciare dopo da terminale)
+sudo pkill -u $(whoami) -f "jupyter-notebook" (da lanciare dopo da terminale)
 
 ######################################################
 ######################################################
@@ -106,6 +108,7 @@ ssh rsabatin@gate.cloudveneto.it
 ssh -i private/~~~~~~~.pem rsabatin@10.67.22.135
 cd MAPD2025_proj3/
 git branch --- git pull --- git merge --- ecc...
+sudo ps aux | grep jupyter-notebook  (controllo se altri  stanno lavorando)
 jupyter notebook --no-browser --port=8898 --ip=0.0.0.0 & bg
 
 ############ PORTS CONNECTION #######################
@@ -129,7 +132,7 @@ http://localhost:4043  (per vedere jobs)
 git  commit
 git pull
 spark.stop()   (da lanciare nel jupyther)
-pkill -f "jupyter-notebook"  (da lanciare dopo da terminale)
+sudo pkill -u $(whoami) -f "jupyter-notebook" (da lanciare dopo da terminale)
 
 ######################################################
 ######################################################
@@ -142,6 +145,7 @@ ssh nmontagn@gate.cloudveneto.it
 ssh -i private/Nicolo_key.pem nmontagn@10.67.22.135
 cd MAPD2025_proj3/
 git branch --- git pull --- git merge --- ecc...
+sudo ps aux | grep jupyter-notebook  (controllo se altri  stanno lavorando)
 jupyter notebook --no-browser --port=8899 --ip=0.0.0.0 & bg
 
 ############ PORTS CONNECTION #######################
@@ -165,4 +169,4 @@ http://localhost:4040  (per vedere jobs)
 git commit
 git pull
 spark.stop()   (da lanciare nel jupyther)
-pkill -f "jupyter-notebook"  (da lanciare dopo da terminale)
+sudo pkill -u $(whoami) -f "jupyter-notebook" (da lanciare dopo da terminale)
