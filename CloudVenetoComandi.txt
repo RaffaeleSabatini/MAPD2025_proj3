@@ -42,7 +42,7 @@ jupyter notebook --no-browser --port=8896 --ip=0.0.0.0 & bg
 --- IN ALTRO TERMINALE ---
 ssh -L 4444:10.67.22.135:8896 \
     -L 8080:10.67.22.135:8080 \
-    -L 4040:10.67.22.135:4040 \
+    -L 4042:10.67.22.135:4042 \
     flarover@gate.cloudveneto.it
     
 ############ APRIRE BROWSER (mod. incognito)  #######################
@@ -50,7 +50,7 @@ ssh -L 4444:10.67.22.135:8896 \
 http://localhost:4444  (per jupyther notebook)
 --- incolla token dell'altro terminale ---
 http://localhost:8080  (master con dati cluster)
-http://localhost:4040  (per vedere jobs)
+http://localhost:4042  (per vedere jobs)
 
 ############ FINITO DI LAVORARE ######################
 
@@ -78,7 +78,7 @@ jupyter notebook --no-browser --port=8897 --ip=0.0.0.0 & bg
 
 ssh -L 4444:10.67.22.135:8897 \
     -L 8080:10.67.22.135:8080 \
-    -L 4040:10.67.22.135:4040 \
+    -L 4041:10.67.22.135:4041 \
     mboscolo@gate.cloudveneto.it
 
 ############ APRIRE BROWSER (mod. incognito)  #######################
@@ -86,7 +86,7 @@ ssh -L 4444:10.67.22.135:8897 \
 http://localhost:4444  (per jupyther notebook)
 --- incolla token dell'altro terminale ---
 http://localhost:8080  (master con dati cluster)
-http://localhost:4040  (per vedere jobs)
+http://localhost:4041  (per vedere jobs)
 
 ############ FINITO DI LAVORARE ######################
 
@@ -114,7 +114,7 @@ jupyter notebook --no-browser --port=8898 --ip=0.0.0.0 & bg
 
 ssh -L 4444:10.67.22.135:8898 \
     -L 8080:10.67.22.135:8080 \
-    -L 4040:10.67.22.135:4040 \
+    -L 4043:10.67.22.135:4043 \
     rsabatin@gate.cloudveneto.it
     
 ############ APRIRE BROWSER (mod. incognito)  #######################
@@ -122,7 +122,7 @@ ssh -L 4444:10.67.22.135:8898 \
 http://localhost:4444  (per jupyther notebook)
 --- incolla token dell'altro terminale ---
 http://localhost:8080  (master con dati cluster)
-http://localhost:4040  (per vedere jobs)
+http://localhost:4043  (per vedere jobs)
 
 ############ FINITO DI LAVORARE ######################
 
