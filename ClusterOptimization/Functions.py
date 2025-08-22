@@ -23,91 +23,74 @@ from pyspark.sql.functions import (
 
 #--------------------------SPARK SESSION ----------------------------------
 
-def CreateSparkSession(core):
+def CreateSparkSession(core, partition):
     os.environ["PYSPARK_PYTHON"] = "/opt/miniconda3/bin/python"
     os.environ["PYSPARK_DRIVER_PYTHON"] = "/opt/miniconda3/bin/python"
     
-    spark = SparkSession.builder \
-        .appName("ProjectCloudVeneto") \
-        .master("spark://10.67.22.135:7077") \
-        .config("spark.scheduler.mode", "FAIR") \
-        .config("spark.scheduler.pool", 'user_a') \
-        .config("spark.scheduler.allocation.file", "file:///usr/local/spark/conf/fairscheduler.xml") \
-        .config("spark.cores.max", core) \
-        .config("spark.sql.execution.arrow.pyspark.enabled", "true") \
-        .config("spark.sql.execution.arrow.pyspark.fallback.enabled", "false") \
-        .config("spark.dynamicAllocation.enabled", "false") \
-        .config("spark.shuffle.service.enabled", "false") \
-        .config("spark.ui.port", 4042) \
-        .getOrCreate()
-        #To suppress the initial warning
-        #.spark.sparkContext.setLogLevel("ERROR")
-        
-
-    sc = spark.sparkContext
+    configs = {
+       "spark.scheduler.mode": "FAIR",                                  # Multi-user scheduler
+       "spark.scheduler.pool": 'user_c',                                    # User pool
+       "spark.scheduler.allocation.file": "file:///usr/local/spark/conf/fairscheduler.xml",  # Scheduler config file
+       "spark.executor.memory": "2200m",                                # Executor RAM
+       "spark.cores.max": core,                                         # Total cores
+       "spark.sql.shuffle.partitions": partition,                      # Shuffle partitions
+       "spark.sql.execution.arrow.pyspark.enabled": "true",             # Enable Arrow
+       "spark.sql.execution.arrow.pyspark.fallback.enabled": "false",   # No Arrow fallback
+       "spark.dynamicAllocation.enabled": "false",                      # No dynamic allocation
+       "spark.shuffle.service.enabled": "false",                        # No shuffle service
+       "spark.ui.port": 4042,                                        # Custom UI port
+       "spark.sql.debug.maxToStringFields": 1000                        # Debug fields limit
+    }
+    
+    spark_builder = SparkSession.builder \
+       .appName("ProjectCloudVeneto") \
+       .master("spark://10.67.22.135:7077")
+    
+    for key, value in configs.items():
+       spark_builder = spark_builder.config(key, value)
+    
+    spark = spark_builder.getOrCreate()
 
     return spark
 
+#--------------------------PIVOTING THE DATASET ----------------------------------
+def Pivot(df):
+    df_all_hw = (df.groupBy("hwid", "when")
+                   .pivot("metric")
+                   .agg(first("value"))
+                   .withColumn("time", from_unixtime(col("when")))
+                   .orderBy("hwid", "when"))
+    return df_all_hw
 
 
-#--------------------------PREPROCESSING THE DATAFRAME ----------------------------------
-def FillGaps(df, sensors = None, interval = 60, modality = 'auto'):
+#--------------------------PREPROCESSING PIPELINE ----------------------------------
+#Create a grid of "interval" seconds in order to have homogeneous separation of data. 
+def CreateGrid(df, interval):
 
-    # 1. Infer sensor columns if not provided
-    if sensors is None:
-        sensors = [c for c in df.columns if c not in ("when", "time")]
+    #time window interval column
+    df_windowed = df.withColumn("time_window", window("time", f"{interval} seconds"))
 
-    # 2. Add timestamp column
-    df_ts = df.withColumn("timestamp", from_unixtime(col("when")).cast("timestamp"))
+    aggs = []
+    sensors = [c for c in df.columns if c not in ("when", "time", "hwid")]
+    for s in sensors:
+        #handle different datatypes: mean continuous metric and take min/max of binary ones
+        stats = df.selectExpr(f"min({s}) as min", f"max({s}) as max").first()
+        is_binary = stats["min"] is not None and stats["max"] is not None    and    0 <= stats["min"] and stats["max"] <= 1
+        
+        # treat differently A5 and A9 sensors 
+        if s in ["A5", "A9"] or is_binary:
+            agg_func = spark_max(col(s)).alias(s)
+        else:
+            agg_func = spark_avg(col(s)).alias(s)
+        aggs.append(agg_func)
 
-    # 3. Create time window
-    df_windowed = df_ts.withColumn("time_window", window("timestamp", f"{interval} seconds"))
+    #groupy by hardware and time_window (homogeneous resampling)
+    result_df = (
+        df_windowed
+        .groupBy("hwid", "time_window")
+        .agg(*aggs)
+    )
 
-    # 4. Aggregate using selected modality
-    if modality == "mode":
-        # Special case: MODE needs groupBy and count per window + sensor
-        aggs = []
-        for s in sensors:
-            mode_df = (
-                df_windowed.groupBy("time_window", s)
-                .agg(count("*").alias("cnt"))
-                .withColumn("rank", row_number().over(
-                    Window.partitionBy("time_window").orderBy(desc("cnt"))
-                ))
-                .filter(col("rank") == 1)
-                .select("time_window", col(s).alias(s))
-            )
-            if not aggs:
-                result_df = mode_df
-            else:
-                result_df = result_df.join(mode_df, on="time_window", how="outer")
-    else:
-        aggs = []
-        for s in sensors:
-            if modality == "mean":
-                agg_func = spark_avg(col(s)).alias(s)
-            elif modality == "min":
-                agg_func = spark_min(col(s)).alias(s)
-            elif modality == "max":
-                agg_func = spark_max(col(s)).alias(s)
-            elif modality == "auto":
-                stats = df.selectExpr(f"min({s}) as min", f"max({s}) as max").first()
-                is_binary = stats["min"] is not None and stats["max"] is not None and 0 <= stats["min"] and stats["max"] <= 1
-                if s in ["A5", "A9"] or is_binary:
-                    agg_func = spark_max(col(s)).alias(s)
-                else:
-                    agg_func = spark_avg(col(s)).alias(s)
-            else:
-                raise ValueError(f"Unsupported modality: {modality}")
-            aggs.append(agg_func)
-
-        result_df = (
-            df_windowed
-            .groupBy("time_window")
-            .agg(*aggs)
-        )
-
-    # 5. Add window_start, window_end, and 'when' as center of window
     result_df = (
         result_df
         .withColumn("window_start", col("time_window.start"))
@@ -117,28 +100,186 @@ def FillGaps(df, sensors = None, interval = 60, modality = 'auto'):
         .orderBy("when")
     )
 
-    # 6. Add window_id as progressive row number
-    result_df = result_df.withColumn("window_id", monotonically_increasing_id())
-
-    return result_df.select(["window_id", "when", "window_start", "window_end"] + sensors)
+    return result_df.select(["hwid", "when","window_start","window_end"]+sensors)
 
 
 #Given the dataset, creates another column with the block id given the max_interval between two data points
-def BuildBlocks(df, max_interval):
+#Create independent blocks in the dataset when the time difference between two record is grater than max_interval
+def BuildBlocks(df, max_interval, sensors):    
 
-    #Computes a new column with the time difference between next timestamp
-    w = Window.partitionBy(lit(1)).orderBy("when")
+    #Parallelized on the 4 hardware
+    w_hw = Window.partitionBy("hwid").orderBy("when")
+    #Compute previous and next timestamp
+    df = (df
+          .withColumn("Prev_TimeStamp", lag("when").over(w_hw))
+          .withColumn("Next_TimeStamp", lead("when").over(w_hw))
+          .withColumn("PrevDiff", col("when") - col("Prev_TimeStamp"))
+          .withColumn("NextDiff", col("Next_TimeStamp") - col("when"))
+         )
 
-    df = df.withColumn("Prev_TimeStamp", lag("when").over(w))
-    df = df.withColumn("TimeDiff_s", col("when") - col("Prev_TimeStamp"))
+    #Check if the timediff between two consecutive data is more than max_interval
+    df = df.withColumn("CheckNewBlock", when(col("PrevDiff") > max_interval, 1).otherwise(0))
+    df = df.withColumn("BlockID", spark_sum("CheckNewBlock").over(w_hw))
 
-    #Handle the first NULL value 
-    df = df.withColumn("TimeDiff_s", coalesce(col("TimeDiff_s"), lit(60)))
-
-    #Define blocks_id
-    df = df.withColumn("CheckNewBlock", when(col("TimeDiff_s") > max_interval, 1).otherwise(0))
-    df = df.withColumn("BlockID", spark_sum("CheckNewBlock").over(w))
+    df = df.drop("CheckNewBlock")
 
     return df
-    
 
+
+#Fill most of all values inside the arbitraty time gap
+def FillNull(df, sensors, max_gap=240):
+    w = Window.partitionBy("hwid", "BlockID").orderBy("when")
+    
+    for s in sensors:
+        prev_val = lag(col(s)).over(w)
+        next_val = lead(col(s)).over(w)
+        
+        df = df.withColumn(s, when(col(s).isNotNull(), col(s))
+            .when(
+                (col("NextDiff") <= max_gap) & 
+                (col("NextDiff") <= col("PrevDiff")), 
+                next_val).when(col("PrevDiff") <= max_gap, prev_val))
+
+    
+    df = df.na.drop(subset=sensors)
+    
+    return df
+
+
+
+
+def UsefulSensors(df_blocks, sensors):
+    df_max = df_blocks.select(*sensors).groupBy().agg( *[spark_max(s).alias(s) for s in sensors] )
+    max_values = df_max.first().asDict()
+    
+    df_min = df_blocks.select(*sensors).groupBy().agg( *[spark_min(s).alias(s) for s in sensors] )
+    min_values = df_min.first().asDict()
+    
+    useless_sensors = [k for k in sensors if max_values[k] == min_values[k]]
+    useful_sensors = [k for k in sensors if k not in useless_sensors]
+
+
+    return useless_sensors, useful_sensors
+
+
+
+
+
+#----------------------------ANOMALY DETECTION
+def detect_anomalies(df, time_separator, threshold, sensors):
+    '''
+    Crea colonne con flag per anomalie.
+    '''
+    # Lag to get previous value within each partition (i.e. within each block)
+    window         = Window.partitionBy("BlockID").orderBy("when")
+    lagged_columns = [lag(col(s)).over(window) for s in sensors] 
+    lag_names      = [f"lagged_{s}" for s in sensors]
+    
+    df_lagged = df.withColumns(dict(zip(lag_names, lagged_columns)))
+
+    # Determina switch del sensore (didSwitch = 1 se il sensore passa da 0 a 1 o viceversa, didSwitch = 0 altrimenti)
+    switch_w     = Window.partitionBy('BlockID').orderBy('when')
+    didSwitch    = [when((col(f"lagged_{s}") != col(s)), 1).otherwise(0) for s in sensors] 
+    switch_names = [f"didSwitch_{s}" for s in sensors]    
+
+    df_didSwitch = df_lagged.withColumns(dict(zip(switch_names, didSwitch)))
+
+    # Detect anomaly group: when two clusters are more distant than time_separator they are grouped as different anomalies
+    # Tutte le anomalie di uno stesso gruppo hanno stesso id, cioè un numero crescente che si resetta ad ogni nuovo blocco
+    df_anomalies = df_didSwitch
+    for sensor in sensors:   
+        # Il periodo anomalo inizia quando il sensore è 1 e finisce quando esso è 0
+        df_start = (
+            df_didSwitch \
+            .withColumn(f'theres0Before_{sensor}', count_if(col(sensor) == 0).over(window.rangeBetween(1, time_separator)) > 0) \
+            .withColumn(f'theres0After_{sensor}', count_if(col(sensor) == 0).over(window.rangeBetween(-time_separator, -1)) > 0) \
+            .filter( 
+                (col(f'didSwitch_{sensor}') == 1) & 
+                (when(col(sensor) == 1, col(f'theres0Before_{sensor}')).otherwise(True)) &
+                (when(col(sensor) == 0, col(f'theres0After_{sensor}')).otherwise(True))
+            ) \
+            .withColumn(f'startGroup_{sensor}', when((col('when')-lag(col('when'), 1, -1e9).over(window))>time_separator, 1).otherwise(0)) \
+            .withColumn(f'anomalyID_{sensor}', spark_sum(col(f'startGroup_{sensor}')).over(window)) \
+        )
+        
+        df_anomalies = df_anomalies.join(
+            other = df_start.select('BlockID', 'when', f'startGroup_{sensor}', f'anomalyID_{sensor}'),
+            on = ['BlockID', 'when'],
+            how = 'left'
+        )
+
+    count_names = [f'count_{s}' for s in sensors]
+    count_cols  = [count('*').over(Window.partitionBy('BlockID', f'anomalyID_{s}')) for s in sensors]
+
+    flag_names  = [f'flag_{s}' for s in sensors]
+    flag_cols   = [when((col(f'count_{s}') >= threshold) & (col(f'anomalyID_{s}') > 0), True).otherwise(False) for s in sensors]
+    
+    df_flag = df_anomalies \
+        .withColumns(dict(zip(count_names, count_cols))) \
+        .withColumns(dict(zip(flag_names, flag_cols))) \
+        .orderBy('BlockID', 'when')
+
+    # Quando ci sono delle righe comprese tra anomalie con stesso ID, queste righe sono a loro volta considerate anomalie
+    next_w  = Window.partitionBy('BlockID').orderBy('when').rangeBetween(0, time_separator)
+    prev_w  = Window.partitionBy('BlockID').orderBy('when').rangeBetween(-time_separator, 0)
+
+    prev_names = [f'prevID_{s}' for s in sensors]
+    prev_id = [when((bool_or(f'flag_{s}').over(prev_w)), spark_max(f'anomalyID_{s}').over(prev_w)).otherwise(None) for s in sensors]
+    next_names = [f'nextID_{s}' for s in sensors]
+    next_id = [when((bool_or(f'flag_{s}').over(next_w)), spark_min(f'anomalyID_{s}').over(next_w)).otherwise(None) for s in sensors]
+
+    df_newID = (
+        df_flag \
+            .withColumns(dict(zip(prev_names, prev_id))) \
+            .withColumns(dict(zip(next_names, next_id)))
+    )
+
+    new_flags = [when((col(f'nextID_{s}') == col(f'prevID_{s}')) & (col(f'nextID_{s}') > 0), True).otherwise(col(f'flag_{s}')) for s in sensors]
+    
+    df_flag = df_newID.withColumns(dict(zip(flag_names, new_flags)))
+    
+    condition = reduce(lambda a, b: a | b, [col(f'flag_{s}') for s in sensors])
+    df_flag = df_flag.withColumn('flag_anomaly', when(condition, 1).otherwise(0))
+
+    return df_flag \
+        .select("BlockID", "when", *sensors, *flag_names, 'flag_anomaly') 
+
+
+
+
+#------------------------CORRELATIONS----------------------------
+
+def correlations(df, sensors_list, target_col, batch_size=25):
+    """
+    Compute correlations between sensors and target column in batches.
+    Returns sorted DataFrame by absolute correlation (descending).
+    """   
+    all_correlations = []
+    
+    # Process sensors in batches to avoid broadcasting large tasks
+    for i in range(0, len(sensors_list), batch_size):
+        batch_sensors = sensors_list[i:i + batch_size]
+        
+        # Create correlation expressions for current batch
+        corr_expressions = [corr(target_col, sensor).alias(f"corr_{sensor}") for sensor in batch_sensors]
+        
+        # Execute correlations for this batch
+        batch_results = df.agg(*corr_expressions).collect()[0]
+        
+        # Extract correlation values (handle nulls as 0.0)
+        batch_correlations = [batch_results[f"corr_{sensor}"] or 0.0 
+                            for sensor in batch_sensors]
+        all_correlations.extend(batch_correlations)
+    
+    # Create DataFrame with results
+    results_df = pd.DataFrame({
+        "Sensors": sensors_list, 
+        "Correlations": all_correlations
+    })
+    
+    # Sort by absolute correlation (highest first)
+    sorted_results = results_df.reindex(
+        results_df["Correlations"].abs().sort_values(ascending=False).index
+    ).reset_index(drop=True)
+    
+    return sorted_results
