@@ -4,20 +4,21 @@ import numpy as np
 import pandas as pd
 from math import ceil
 import matplotlib.pyplot as plt
+from functools import reduce
+from joblib import Parallel, delayed
+from IPython.display import display, HTML
 
-# PySpark core
 from pyspark import SparkFiles
 from pyspark.sql import SparkSession, DataFrame, Window
-from pyspark.sql.types import IntegerType
+from pyspark.sql.types import StructType, StructField, IntegerType, DoubleType, TimestampType, BooleanType
 
-# PySpark functions
 from pyspark.sql.functions import (
-    coalesce,
-    col, lit, expr, when, count, sum as spark_sum, abs as spark_abs,
+    coalesce, corr, array, countDistinct, approx_count_distinct,
+    col, lit, expr, when, count, count_if, row_number, sum as spark_sum, abs as spark_abs,
     round as spark_round, min as spark_min, max as spark_max, avg as spark_avg,
-    first, last, lag, row_number, desc, asc,
+    first, last, lag, lead, row_number, desc, asc, bool_or, floor,
     explode, sequence, from_unixtime, to_date, unix_timestamp,
-    window, min_by, mode, concat, monotonically_increasing_id
+    window, min_by, mode, concat, monotonically_increasing_id, mean, rand
 )
 
 
