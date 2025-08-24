@@ -24,7 +24,7 @@ from pyspark.sql.functions import (
 
 #--------------------------SPARK SESSION ----------------------------------
 
-def CreateSparkSession(core, partition):
+def CreateSparkSession(Maxcores, partition, Nexecutors, MEMexec):
     os.environ["PYSPARK_PYTHON"] = "/opt/miniconda3/bin/python"
     os.environ["PYSPARK_DRIVER_PYTHON"] = "/opt/miniconda3/bin/python"
     
@@ -32,8 +32,9 @@ def CreateSparkSession(core, partition):
        "spark.scheduler.mode": "FAIR",                                  # Multi-user scheduler
        "spark.scheduler.pool": 'user_c',                                    # User pool
        "spark.scheduler.allocation.file": "file:///usr/local/spark/conf/fairscheduler.xml",  # Scheduler config file
-       "spark.executor.memory": "2200m",                                # Executor RAM
-       "spark.cores.max": core,                                         # Total cores
+       "spark.executor.memory": MEMexec,                                # Executor RAM
+       "spark.executor.instances": Nexecutors,                          # Number of executors
+       "spark.cores.max": Maxcores,                                         # Total cores
        "spark.sql.shuffle.partitions": partition,                      # Shuffle partitions
        "spark.sql.execution.arrow.pyspark.enabled": "true",             # Enable Arrow
        "spark.sql.execution.arrow.pyspark.fallback.enabled": "false",   # No Arrow fallback
