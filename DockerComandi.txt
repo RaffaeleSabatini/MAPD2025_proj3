@@ -4,6 +4,12 @@ docker ps -a (per vedere i processi)
 docker compose down
 
 
+docker exec -it jupyter-notebook bash
+pip install seaborn
+exit
+
+
+
 In browser solite 3 finestre ad
 http://localhost:4444/
 http://localhost:8080/
