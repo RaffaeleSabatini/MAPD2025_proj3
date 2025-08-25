@@ -41,7 +41,8 @@ def CreateSparkSession(Maxcores, partition, Nexecutors, MEMexec, log = False):
        "spark.dynamicAllocation.enabled": "false",                      # No dynamic allocation
        "spark.shuffle.service.enabled": "false",                        # No shuffle service
        "spark.ui.port": 4042,                                        # Custom UI port
-       "spark.sql.debug.maxToStringFields": 1000                        # Debug fields limit
+       "spark.sql.debug.maxToStringFields": 1000,                        # Debug fields limit
+        "spark.sparkContext.setCheckpointDir": "file:///mnt/shared/checkpoints"
     }
     
     spark_builder = SparkSession.builder \
