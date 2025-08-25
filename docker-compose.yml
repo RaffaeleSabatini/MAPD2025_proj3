@@ -16,7 +16,7 @@ services:
       - $PWD:/mapd-workspace
     environment:
       - SPARK_WORKER_CORES=2
-      - SPARK_WORKER_MEMORY=1500m
+      - SPARK_WORKER_MEMORY=2000m
   jupyter-notebook:
     image: jpazzini/mapd-b:spark-jupyter
     container_name: jupyter-notebook
