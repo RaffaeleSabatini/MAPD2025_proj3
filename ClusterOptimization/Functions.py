@@ -24,7 +24,7 @@ from pyspark.sql.functions import (
 
 #--------------------------SPARK SESSION ----------------------------------
 
-def CreateSparkSession(Maxcores, partition, Nexecutors, MEMexec):
+def CreateSparkSession(Maxcores, partition, Nexecutors, MEMexec, log = False):
     os.environ["PYSPARK_PYTHON"] = "/opt/miniconda3/bin/python"
     os.environ["PYSPARK_DRIVER_PYTHON"] = "/opt/miniconda3/bin/python"
     
@@ -50,13 +50,17 @@ def CreateSparkSession(Maxcores, partition, Nexecutors, MEMexec):
     
     for key, value in configs.items():
        spark_builder = spark_builder.config(key, value)
+        
     
     spark = spark_builder.getOrCreate()
+    if log:
+        spark.sparkContext.setLogLevel("ERROR")
 
     return spark
 
 #--------------------------PIVOTING THE DATASET ----------------------------------
 def Pivot(df):
+
     df_all_hw = (df.groupBy("hwid", "when")
                    .pivot("metric")
                    .agg(first("value"))
@@ -285,3 +289,61 @@ def correlations(df, sensors_list, target_col, batch_size=25):
     ).reset_index(drop=True)
     
     return sorted_results
+
+
+#------------------------PREDICTIVE MAINTEINANCE--------------------------
+
+def extract_alarms(df, columns=["A5", "A9"], bits=[6, 7, 8]):
+    for col_name in columns:
+        for bit in bits:
+            convert_bit = bit - 1  # bit 1 is LSB
+            df = df.withColumn( f"{bit}-{col_name}", ((col(col_name).bitwiseAND(1 << convert_bit)) > 0).cast("int") )
+
+    df = df.withColumn(
+        "overheating",
+        when(
+            (col("6-A5") == 1) | (col("7-A5") == 1) | (col("8-A5") == 1) | (col("6-A9") == 1) | (col("7-A9") == 1) | (col("8-A9") == 1), 1)
+            .otherwise(0).cast("int")).where( (col("A5").isNotNull()) | (col("A9").isNotNull()) )
+    return df
+
+
+def add_predictive(df, target, window_before_heating=30, join=True ,debug=False): #window_before_heating in minutes
+
+    w = Window.partitionBy("BlockID").orderBy("when")
+
+    df_pred = df.select("BlockID","when","window_start",target)
+    df_pred = df.withColumn(f"prev_{target}", lag(target).over(w))
+    df_pred = df_pred.withColumn(
+        f"is_start_{target}",
+        when(
+            (col(target) == 1) &
+            ((col(f"prev_{target}") != 1) | col(f"prev_{target}").isNull()),
+            1
+        ).otherwise(0)
+    )
+
+    df_pred = df_pred.withColumn(f"start_time_{target}", when(col(f"is_start_{target}") == 1, col("when")))
+
+    w_future = w.rowsBetween(Window.currentRow, Window.unboundedFollowing)
+    df_pred = df_pred.withColumn(
+        f"next_start_{target}",
+        first(f"start_time_{target}", ignorenulls=True).over(w_future)
+    )
+
+    window_seconds = window_before_heating * 60
+    df_pred = df_pred.withColumn(
+    f"predictive_{target}",
+        when(
+            (col(f"next_start_{target}").isNotNull()) &
+            (((col(target).isNull()) | (col(target) == 0))) &
+            ((col(f"next_start_{target}") - col("when")) > 0) &
+            ((col(f"next_start_{target}") - col("when")) <= window_seconds), 1 ).otherwise(0))
+
+    if not debug:
+        df_pred = df_pred.select("BlockID","when",target,f"predictive_{target}")
+
+
+    if join:
+        return df.join( df_pred.select('when', f'predictive_{target}') , on='when', how='left' )
+    else:
+        return df_pred
