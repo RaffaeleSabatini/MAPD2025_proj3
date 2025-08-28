@@ -11,6 +11,7 @@ from IPython.display import display, HTML
 from pyspark import SparkFiles
 from pyspark.sql import SparkSession, DataFrame, Window
 from pyspark.sql.types import StructType, StructField, IntegerType, DoubleType, TimestampType, BooleanType
+from pyspark.sql import functions as F
 
 from pyspark.sql.functions import (
     coalesce, corr, array, countDistinct, approx_count_distinct,
@@ -41,7 +42,11 @@ def CreateSparkSession(Maxcores, partition, Nexecutors, MEMexec, log = False):
        "spark.dynamicAllocation.enabled": "false",                      # No dynamic allocation
        "spark.shuffle.service.enabled": "false",                        # No shuffle service
        "spark.ui.port": 4042,                                        # Custom UI port
-       "spark.sql.debug.maxToStringFields": 1000                        # Debug fields limit
+       "spark.sql.debug.maxToStringFields": 1000,                        # Debug fields limit
+        "spark.memory.fraction": 0.6,                                    # fraction of heap for execution + storage
+        "spark.memory.storageFraction": 0.6,                           # fraction of heap reserved for storage (persist/cache)
+        "spark.driver.memory": "1g", 
+        "spark.executor.memoryOverhead": "1g"
     }
     
     spark_builder = SparkSession.builder \
@@ -93,7 +98,7 @@ def CreateGrid(df, interval):
     #groupy by hardware and time_window (homogeneous resampling)
     result_df = (
         df_windowed
-        .groupBy("hwid", "time_window")
+        .groupBy("time_window")
         .agg(*aggs)
     )
 
@@ -106,7 +111,7 @@ def CreateGrid(df, interval):
         .orderBy("when")
     )
 
-    return result_df.select(["hwid", "when","window_start","window_end"]+sensors)
+    return result_df.select(["when","window_start","window_end"]+sensors)
 
 
 #Given the dataset, creates another column with the block id given the max_interval between two data points
@@ -114,7 +119,7 @@ def CreateGrid(df, interval):
 def BuildBlocks(df, max_interval, sensors):    
 
     #Parallelized on the 4 hardware
-    w_hw = Window.partitionBy("hwid").orderBy("when")
+    w_hw = Window.partitionBy(F.lit(1)).orderBy("when")
     #Compute previous and next timestamp
     df = (df
           .withColumn("Prev_TimeStamp", lag("when").over(w_hw))
@@ -134,7 +139,7 @@ def BuildBlocks(df, max_interval, sensors):
 
 #Fill most of all values inside the arbitraty time gap
 def FillNull(df, sensors, max_gap=240):
-    w = Window.partitionBy("hwid", "BlockID").orderBy("when")
+    w = Window.partitionBy("BlockID").orderBy("when")
     
     for s in sensors:
         prev_val = lag(col(s)).over(w)
@@ -172,11 +177,12 @@ def UsefulSensors(df_blocks, sensors):
 
 
 #----------------------------ANOMALY DETECTION
-def detect_anomalies(df, time_separator, threshold, sensors):
+def detect_anomalies(df, time_separator, threshold, sensors, partition):
     '''
     Crea colonne con flag per anomalie.
     '''
     # Lag to get previous value within each partition (i.e. within each block)
+    df = df.repartition(partition, "BlockID")
     window         = Window.partitionBy("BlockID").orderBy("when")
     lagged_columns = [lag(col(s)).over(window) for s in sensors] 
     lag_names      = [f"lagged_{s}" for s in sensors]
@@ -184,7 +190,6 @@ def detect_anomalies(df, time_separator, threshold, sensors):
     df_lagged = df.withColumns(dict(zip(lag_names, lagged_columns)))
 
     # Determina switch del sensore (didSwitch = 1 se il sensore passa da 0 a 1 o viceversa, didSwitch = 0 altrimenti)
-    switch_w     = Window.partitionBy('BlockID').orderBy('when')
     didSwitch    = [when((col(f"lagged_{s}") != col(s)), 1).otherwise(0) for s in sensors] 
     switch_names = [f"didSwitch_{s}" for s in sensors]    
 
@@ -256,31 +261,19 @@ def detect_anomalies(df, time_separator, threshold, sensors):
 #------------------------CORRELATIONS----------------------------
 
 def correlations(df, sensors_list, target_col, batch_size=25):
-    """
-    Compute correlations between sensors and target column in batches.
-    Returns sorted DataFrame by absolute correlation (descending).
-    """   
-    all_correlations = []
+        
+    # Create correlation expressions for current batch
+    corr_expressions = [corr(target_col, sensor).alias(f"corr_{sensor}") for sensor in sensors_list]
     
-    # Process sensors in batches to avoid broadcasting large tasks
-    for i in range(0, len(sensors_list), batch_size):
-        batch_sensors = sensors_list[i:i + batch_size]
-        
-        # Create correlation expressions for current batch
-        corr_expressions = [corr(target_col, sensor).alias(f"corr_{sensor}") for sensor in batch_sensors]
-        
-        # Execute correlations for this batch
-        batch_results = df.agg(*corr_expressions).collect()[0]
-        
-        # Extract correlation values (handle nulls as 0.0)
-        batch_correlations = [batch_results[f"corr_{sensor}"] or 0.0 
-                            for sensor in batch_sensors]
-        all_correlations.extend(batch_correlations)
+    # Execute correlations for this batch
+    batch_results = df.agg(*corr_expressions).collect()[0]
+
+    batch_correlations = [batch_results[f"corr_{sensor}"] or 0.0 for sensor in sensors_list]
     
     # Create DataFrame with results
     results_df = pd.DataFrame({
         "Sensors": sensors_list, 
-        "Correlations": all_correlations
+        "Correlations": batch_correlations
     })
     
     # Sort by absolute correlation (highest first)
@@ -307,8 +300,9 @@ def extract_alarms(df, columns=["A5", "A9"], bits=[6, 7, 8]):
     return df
 
 
-def add_predictive(df, target, window_before_heating=30, join=True ,debug=False): #window_before_heating in minutes
+def add_predictive(df, target, window_before_heating=30, join=True ,debug=False, partition = 10):
 
+    df = df.repartition(partition, "BlockID")
     w = Window.partitionBy("BlockID").orderBy("when")
 
     df_pred = df.select("BlockID","when","window_start",target)
@@ -340,7 +334,7 @@ def add_predictive(df, target, window_before_heating=30, join=True ,debug=False)
             ((col(f"next_start_{target}") - col("when")) <= window_seconds), 1 ).otherwise(0))
 
     if not debug:
-        df_pred = df_pred.select("BlockID","when",target,f"predictive_{target}")
+        df_pred = df_pred.select("when",target,f"predictive_{target}")
 
 
     if join:
