@@ -182,7 +182,7 @@ def detect_anomalies(df, time_separator, threshold, sensors, partition):
     '''
     # Lag to get previous value within each partition (i.e. within each block)
     df = df.repartition("hwid", "BlockID")
-    window         = Window.partitionBy("hwid", "BlockID").orderBy("when").rangeBetween(-2400, 0)
+    window         = Window.partitionBy("BlockID").orderBy("when")
     lagged_columns = [lag(col(s)).over(window) for s in sensors] 
     lag_names      = [f"lagged_{s}" for s in sensors]
     
@@ -219,7 +219,7 @@ def detect_anomalies(df, time_separator, threshold, sensors, partition):
         )
 
     count_names = [f'count_{s}' for s in sensors]
-    count_cols  = [count('*').over(Window.partitionBy("hwid", 'BlockID', f'anomalyID_{s}')) for s in sensors]
+    count_cols  = [count('*').over(Window.partitionBy('BlockID', f'anomalyID_{s}')) for s in sensors]
 
     flag_names  = [f'flag_{s}' for s in sensors]
     flag_cols   = [when((col(f'count_{s}') >= threshold) & (col(f'anomalyID_{s}') > 0), True).otherwise(False) for s in sensors]
@@ -230,8 +230,8 @@ def detect_anomalies(df, time_separator, threshold, sensors, partition):
         .orderBy('BlockID', 'when')
 
     # Quando ci sono delle righe comprese tra anomalie con stesso ID, queste righe sono a loro volta considerate anomalie
-    next_w  = Window.partitionBy("hwid", 'BlockID').orderBy("hwid", 'when').rangeBetween(0, time_separator)
-    prev_w  = Window.partitionBy("hwid", 'BlockID').orderBy("hwid", 'when').rangeBetween(-time_separator, 0)
+    next_w  = Window.partitionBy('BlockID').orderBy('when').rangeBetween(0, time_separator)
+    prev_w  = Window.partitionBy('BlockID').orderBy('when').rangeBetween(-time_separator, 0)
 
     prev_names = [f'prevID_{s}' for s in sensors]
     prev_id = [when((bool_or(f'flag_{s}').over(prev_w)), spark_max(f'anomalyID_{s}').over(prev_w)).otherwise(None) for s in sensors]
@@ -259,7 +259,7 @@ def detect_anomalies(df, time_separator, threshold, sensors, partition):
 
 #------------------------CORRELATIONS----------------------------
 
-def compute_correlations(joined_df, sensors_list, target_col):
+def correlations(joined_df, sensors_list, target_col):
     # Build expressions for correlations with alias including hwid
     exprs = [F.corr(F.col(target_col), F.col(s)).alias(f"corr_{s}") for s in sensors_list]
     
